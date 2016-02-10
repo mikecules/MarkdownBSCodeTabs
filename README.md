@@ -23,18 +23,22 @@ Markdown
 
 blah blah content
 
-   ` ` `<lang1>
+   ` ` `{lang1}
     some code here in lang1
    ` ` `
-   ` ` `<lang2>
+   ` ` `{lang2}
       some code here in lang2
     ` ` `
   
 ```
 
-Where **<langX>** is a valid language specifier in hilight.js see the [highlight.js demo](https://highlightjs.org/static/demo/) for examples of languages specifiers you can use.
+Where **{langX}** is a valid language specifier in hilight.js see the [highlight.js demo](https://highlightjs.org/static/demo/) for examples of language specifiers you can use. Also note that we are using 
+     ``` ``` ``` characters - in the above example, characters have been spaced out so it renders correctly on Github.
+
+
 
 ## For Use in mkdocs
+
 ### Configuring your mkdocs.yml
 ```yml
 markdown_extensions:
