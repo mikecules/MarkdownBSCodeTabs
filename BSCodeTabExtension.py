@@ -87,6 +87,7 @@ from markdown.extensions import Extension
 from markdown.preprocessors import Preprocessor
 from collections import deque
 from time import time
+
 import re
 import random
 
@@ -96,12 +97,13 @@ class BSCodeTabSet(object):
     TAB_SET_HANDLE_CONTAINER_TEMPLATE = """
         <ul class="nav nav-tabs" role="tablist">
             {tabHandles}
-        </ul>"""
+        </ul>
+    """
     TAB_SET_HANDLE_TEMPLATE = """
         <li role="presentation" class="{isTabActiveClass}">
             <a href="#{id}" aria-controls="{id}" role="tab" data-toggle="tab">{ulang}</a>
         </li>
-        """
+    """
     TAB_SET_TAB_CONTAINER_TEMPLATE = """
         <div class="tab-content">
             {tabs}
@@ -111,7 +113,7 @@ class BSCodeTabSet(object):
         <div role="tabpanel" class="tab-pane {isTabActiveClass} fade in" id="{id}">
             {tabContent}
         </div>
-        """
+    """
     RANDOM_ID_CHAR_LENGTH = 15
 
 
@@ -196,7 +198,7 @@ class BSCodeTab(object):
         self.tabBody = body
 
 
-    # Defaults to return a hilight style html block
+    # Defaults to return a hilite style html block
     def __str__(self):
         return self.CODE_TAB_BODY_WRAP.format(
             lang = self.LANG_TAG.format(lang = self.lang.lower()),
@@ -234,14 +236,20 @@ class CodeFencePreprocessor(Preprocessor):
         ''', re.MULTILINE | re.DOTALL | re.VERBOSE
     )
     CODE_TAB_PLACE_HOLDER_TEMPLATE = '<!-- {0}__code_tab__{{0}} -->'
-    CODE_TAB_PLACE_HOLDER_REGEX = re.compile(r'<!-- ([0-9\.]+)(__code_tab__)(\d+) -->')
+    CODE_TAB_PLACE_HOLDER_REGEX_TEMPLATE = '<!-- {0}__code_tab__([0-9]+) -->'
 
 
-    def __init__(self, md):
+    def __init__(self, md, code_fence_config = None):
         # Initialize the Preprocessor
-        super(CodeFencePreprocessor, self).__init__(md)
         self.bs_tabs = deque()
-        self.tab_placeholder = self._generate_tab_placeholder()
+
+        placeholder_dict = self._generate_tab_placeholder()
+        self.tab_placeholder = placeholder_dict['placeholder']
+        self.tab_placeholder_regex = placeholder_dict['placeholder_regex']
+
+        self.code_fence_config = code_fence_config
+
+        super(CodeFencePreprocessor, self).__init__(md)
 
 
     def _generate_tab_placeholder(self):
@@ -249,7 +257,10 @@ class CodeFencePreprocessor(Preprocessor):
         # used to create a unique signature
         current_time = time()
 
-        return self.CODE_TAB_PLACE_HOLDER_TEMPLATE.format(current_time)
+        return {
+            'placeholder': self.CODE_TAB_PLACE_HOLDER_TEMPLATE.format(current_time),
+            'placeholder_regex': re.compile(self.CODE_TAB_PLACE_HOLDER_REGEX_TEMPLATE.format(current_time))
+        }
 
 
     def _populate_tabs(self, parsed_placeholder_text):
@@ -260,14 +271,15 @@ class CodeFencePreprocessor(Preprocessor):
         tab_set_count = 0
         transformed_lines = ''
         num_tabs = len(self.bs_tabs)
+        show_all_code_as_folders = self.code_fence_config['show_all_code_as_folders']
 
         for line in lines:
-            m = self.CODE_TAB_PLACE_HOLDER_REGEX.search(line)
+            m = self.tab_placeholder_regex.search(line)
 
             if m:
 
                 if start_tab_index is None:
-                    start_tab_index = m.group(3)
+                    start_tab_index = m.group(1)
 
                 tab_run_length += 1
 
@@ -278,17 +290,24 @@ class CodeFencePreprocessor(Preprocessor):
                 # We have a non tab save to the tab set so let's aggregate
                 # the tabs into a tab set and generate the corresponding HTML
                 if len(line.strip()) != 0 and start_tab_index is not None:
-                    tab_set = BSCodeTabSet('tab-' + str(tab_set_count) + '-')
-                    tab_set_count += 1
 
-                    for i in range(0, tab_run_length):
-                        tab = self.bs_tabs.popleft()
-                        tab_set.add_code_tab(tab)
+                    if show_all_code_as_folders or (not show_all_code_as_folders and tab_run_length > 1):
+                        tab_set = BSCodeTabSet('tab-' + str(tab_set_count) + '-')
+                        tab_set_count += 1
 
-                    transformed_lines += '\n' + self.markdown.htmlStash.store(str(tab_set), safe = True) + '\n'
+                        for i in range(0, tab_run_length):
+                            tab = self.bs_tabs.popleft()
+                            tab_set.add_code_tab(tab)
+
+                        # Convert our tab set (and tabs) into the appropriate HTML
+                        tab_html = str(tab_set)
+                    else:
+                        # Convert our single tab into the appropriate HTML
+                        tab_html = str(self.bs_tabs.popleft())
 
                     start_tab_index = None
                     tab_run_length = 0
+                    transformed_lines += '\n' + self.markdown.htmlStash.store(tab_html, safe = True) + '\n'
 
             # Put the newline back in the string
             transformed_lines += line + '\n'
@@ -306,7 +325,9 @@ class CodeFencePreprocessor(Preprocessor):
         # print(transformed_lines)
         return transformed_lines
 
-    def _filterContent(self, content):
+
+    @staticmethod
+    def filter_content(content):
 
         string_block = content.replace(u'\u2018', '&lsquo;')
         string_block = string_block.replace(u'\u2019', '&rsquo;')
@@ -323,19 +344,16 @@ class CodeFencePreprocessor(Preprocessor):
         return string_block
 
 
-
-
     def _identify_code_tabs(self, block_str):
 
-        string_block = self._filterContent(block_str)
-
+        string_block = CodeFencePreprocessor.filter_content(block_str)
 
         while True:
 
             m = self.FENCE_BLOCK_REGEX.search(string_block)
 
             if m:
-                lang = None
+                lang = self.code_fence_config['default_lang']
 
                 if m.group('lang'):
                     lang = m.group('lang')
@@ -368,15 +386,31 @@ class CodeFencePreprocessor(Preprocessor):
 # Extension Class
 class BSCodeTabExtension(Extension):
 
+    def __init__(self, *args, **kwargs):
+
+        # Config defaults
+        self.config = {
+            'default_lang': ['source', 'Sets the default language to be used when none is given in the ``` code block'],
+            'show_all_code_as_folders': [True, 'Render all ``` code blocks as folders (even if there is only one)']
+        }
+
+        super(BSCodeTabExtension, self).__init__(*args, **kwargs)
+
+
     def extendMarkdown(self, md, md_globals):
+        show_all_code_as_folders = self.getConfig('show_all_code_as_folders')
+
+        # Just in case convert this parameter to a bool if it is sent in as a string
+        if isinstance(show_all_code_as_folders, str):
+            self.setConfig('show_all_code_as_folders', False if show_all_code_as_folders.upper() is 'FALSE' else True)
 
         md.registerExtension(self)
 
         # Add CodeFencePreprocessor to the Markdown instance.
         md.preprocessors.add('fenced_code_block',
-                             CodeFencePreprocessor(md),
+                             CodeFencePreprocessor(md, self.getConfigs()),
                              '>normalize_whitespace')
 
 
-def makeExtension(config=None):
-    return BSCodeTabExtension(config)
+def makeExtension(*args, **kwargs):
+    return BSCodeTabExtension(*args, **kwargs)
