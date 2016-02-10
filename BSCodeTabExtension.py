@@ -110,16 +110,17 @@ class BSCodeTabSet(object):
         </div>
     """
     TAB_BODY_CONTAINER_TEMPLATE = """
-        <div role="tabpanel" class="tab-pane {isTabActiveClass} fade in" id="{id}">
+        <div role="tabpanel" class="tab-pane {isTabActiveClass} {animationClasses}" id="{id}">
             {tabContent}
         </div>
     """
     RANDOM_ID_CHAR_LENGTH = 15
 
 
-    def __init__(self, id):
-        self.id = id
+    def __init__(self, tab_id, should_animate):
+        self.id = tab_id
         self.codeTabs = deque()
+        self.should_animate = should_animate
 
 
     def add_code_tab(self, code_tab):
@@ -152,6 +153,7 @@ class BSCodeTabSet(object):
         tab_active_class = 'active'
         tab_handles = ''
         tabs = ''
+        animation_classes = 'fade in' if self.should_animate else ''
 
         for tab in self.codeTabs:
 
@@ -166,6 +168,7 @@ class BSCodeTabSet(object):
             tabs += self.TAB_BODY_CONTAINER_TEMPLATE.format(id = tab_set_id,
                                                             isTabActiveClass = tab_active_class,
                                                             lang = tab.get_lang(),
+                                                            animationClasses = animation_classes,
                                                             tabContent = str(tab))
             tab_active_class = ''
 
@@ -173,7 +176,7 @@ class BSCodeTabSet(object):
         tab_set_str += self.TAB_SET_TAB_CONTAINER_TEMPLATE.format(tabs = tabs)
 
         return """
-                <div>
+                <div class="tab-set-container">
                     {tabSet}
                 </div>
                     """.format(tabSet = tab_set_str)
@@ -272,6 +275,7 @@ class CodeFencePreprocessor(Preprocessor):
         transformed_lines = ''
         num_tabs = len(self.bs_tabs)
         show_all_code_as_folders = self.code_fence_config['show_all_code_as_folders']
+        should_animate_tab_transition = self.code_fence_config['animate_tab_transitions']
 
         for line in lines:
             m = self.tab_placeholder_regex.search(line)
@@ -292,7 +296,7 @@ class CodeFencePreprocessor(Preprocessor):
                 if len(line.strip()) != 0 and start_tab_index is not None:
 
                     if show_all_code_as_folders or (not show_all_code_as_folders and tab_run_length > 1):
-                        tab_set = BSCodeTabSet('tab-' + str(tab_set_count) + '-')
+                        tab_set = BSCodeTabSet('tab-' + str(tab_set_count) + '-', should_animate_tab_transition)
                         tab_set_count += 1
 
                         for i in range(0, tab_run_length):
@@ -314,7 +318,7 @@ class CodeFencePreprocessor(Preprocessor):
 
         # If there are any remaining tabs enclose them in a final last tab set
         if len(self.bs_tabs) > 0:
-            tab_set = BSCodeTabSet('tab-' + str(num_tabs) + '-')
+            tab_set = BSCodeTabSet('tab-' + str(num_tabs) + '-', should_animate_tab_transition)
 
             for tab in self.bs_tabs:
                 tab_set.add_code_tab(tab)
@@ -361,6 +365,7 @@ class CodeFencePreprocessor(Preprocessor):
                 # Add our tabs to our list.
                 # We will later use this list to perform our aggregation into tab sets
                 self.bs_tabs.append(BSCodeTab(lang, lang, m.group('code')))
+
                 key = self.tab_placeholder.format(len(self.bs_tabs) - 1)
 
                 # Replace the code fences with a tab placeholder
@@ -391,18 +396,32 @@ class BSCodeTabExtension(Extension):
         # Config defaults
         self.config = {
             'default_lang': ['source', 'Sets the default language to be used when none is given in the ``` code block'],
-            'show_all_code_as_folders': [True, 'Render all ``` code blocks as folders (even if there is only one)']
+            'show_all_code_as_folders': [True, 'Render all ``` code blocks as folders (even if there is only one)'],
+            'animate_tab_transitions': [False, 'Whether or not there should be tab transition animation.']
         }
 
         super(BSCodeTabExtension, self).__init__(*args, **kwargs)
 
+    @staticmethod
+    def to_bool(param):
+        the_bool = param
+
+        if isinstance(param, str):
+            the_bool = False if param.upper() is 'FALSE' else True
+
+        return the_bool
 
     def extendMarkdown(self, md, md_globals):
-        show_all_code_as_folders = self.getConfig('show_all_code_as_folders')
 
         # Just in case convert this parameter to a bool if it is sent in as a string
-        if isinstance(show_all_code_as_folders, str):
-            self.setConfig('show_all_code_as_folders', False if show_all_code_as_folders.upper() is 'FALSE' else True)
+        self.setConfig('show_all_code_as_folders', BSCodeTabExtension.to_bool(
+            self.getConfig('show_all_code_as_folders')
+        ))
+
+        # Just in case convert this parameter to a bool if it is sent in as a string
+        self.setConfig('animate_tab_transitions', BSCodeTabExtension.to_bool(
+            self.getConfig('animate_tab_transitions')
+        ))
 
         md.registerExtension(self)
 
