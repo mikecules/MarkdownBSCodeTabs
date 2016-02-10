@@ -46,7 +46,7 @@ markdown_extensions:
       show_all_code_as_folders: False
       animate_tab_transitions: False
 ```
-In this example we are setting the default source language to be used when no source language is specified in the 
+In this example we are setting the default source language to be ```javascript``` when no source language is specified ```(DEFAULT: 'source')``` in the 
 ```javascript
     ```
       // this is javascript be default
@@ -55,7 +55,7 @@ In this example we are setting the default source language to be used when no so
       }
     ```
 ``` 
-block fence
+block fence. The ```show_all_code_as_folders```configuration ```(DEFAULT: True)``` allows us to set whether or not a single code fence should be converted to a single tab and the ```animate_tab_transitions``` configuration  ```(DEFAULT: False)``` allows us to set whether or not we want to use a **fade** transition between tab selections.
 
 
 
