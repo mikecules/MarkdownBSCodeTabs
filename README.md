@@ -54,6 +54,10 @@ This is more text
   
 ```
 
+Becomes
+
+![Screenshot of MarkdownBSCodeTabs](./doc-resources/tabs.png)
+
 Where **{langX}** placed after *```* is a valid language specifier in hilight.js see the [highlight.js demo](https://highlightjs.org/static/demo/) for examples of language specifiers you can use. Also note that we are using *```* characters - in the above example, characters have been over indented so it renders correctly on Github.
 
 
