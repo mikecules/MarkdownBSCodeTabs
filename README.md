@@ -23,16 +23,20 @@ Markdown
 
 blah blah content
 
-   ` ` `{lang1}
-    some code here in lang1
+   ` ` `python
+    def foo2():
+      bar = 16
+      return 64
    ` ` `
-   ` ` `{lang2}
-      some code here in lang2
+   ` ` `javascript
+      if (a > b) {
+         alert('Hello World');
+      }
     ` ` `
   
 ```
 
-Where **{langX}** is a valid language specifier in hilight.js see the [highlight.js demo](https://highlightjs.org/static/demo/) for examples of language specifiers you can use. Also note that we are using *```* characters - in the above example, characters have been spaced out so it renders correctly on Github.
+Where **{langX}** placed after *```* is a valid language specifier in hilight.js see the [highlight.js demo](https://highlightjs.org/static/demo/) for examples of language specifiers you can use. Also note that we are using *```* characters - in the above example, characters have been spaced out so it renders correctly on Github.
 
 
 
